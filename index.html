@@ -15,419 +15,61 @@
   <style>html, body { background:#fff; } .container { max-width: 1120px; }</style>
 </head>
 <body class="min-h-screen">
+  <script>console.log('boot-v3'); alert('페이지 로드 OK (v3, SW off)');</script>
   <div id="root" class="container mx-auto p-4 md:p-6 lg:p-8"></div>
 
+  <!-- Service worker intentionally disabled for diagnosis
   <script>
-    
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(console.error);
-  });
-}
-
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
+      });
+    }
   </script>
+  -->
 
   <script type="text/babel" data-presets="env,react">
     const { useState, useEffect, useMemo } = React;
-    const {
-      LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
-      ResponsiveContainer, BarChart, Bar
-    } = Recharts;
-
+    const { LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer, BarChart, Bar } = Recharts;
     const LS_KEY = "workout_tracker_v1";
     const formatDate = (d) => new Date(d).toISOString().slice(0,10);
     const todayStr = () => formatDate(new Date());
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-    function weekNumberFrom(startDate, targetDate) {
-      const s = new Date(startDate), t = new Date(targetDate);
-      const diff = Math.floor((t - s) / (1000*60*60*24));
-      return Math.max(1, Math.floor(diff / 7) + 1);
-    }
-    function phaseFromWeek(week) { return week <= 4 ? 1 : week <= 8 ? 2 : 3; }
-    function estimate1RM(weight, reps) { if (!weight || !reps) return null; return Math.round(weight * (1 + reps / 30)); }
+    function weekNumberFrom(startDate, targetDate) { const s=new Date(startDate), t=new Date(targetDate); const diff=Math.floor((t-s)/86400000); return Math.max(1, Math.floor(diff/7)+1); }
+    function phaseFromWeek(week){ return week<=4?1:week<=8?2:3; }
+    function estimate1RM(w,r){ if(!w||!r) return null; return Math.round(w*(1+r/30)); }
 
-    const PLAN = {
-      phase1: { name: "1개월차 (자세/감각)", setRep: { mainSets: 3, reps: "12–15", repMin: 12, repMax: 15, rpe: "6–7" },
-        days: {
-          Mon: [{name:"레그 프레스",body:"하체",tips:"무릎 완전잠김 금지"},{name:"체스트 프레스",body:"가슴",tips:"견갑 후인이완, 45–60°"},{name:"랫 풀 다운",body:"등",tips:"쇄골/윗가슴까지"},{name:"시티드 로우",body:"등",tips:"팔꿈치로 뒤를 찌르기"},{name:"숄더 프레스",body:"어깨",tips:"승모 과개입 방지"},{name:"플랭크",body:"코어",tips:"30–60초"}],
-          Wed: [{name:"레그 프레스",body:"하체",tips:"하강 2초·상승 1초"},{name:"체스트 프레스",body:"가슴",tips:"손목 꺾임 금지"},{name:"랫 풀 다운",body:"등",tips:"목뒤 금지"},{name:"레그 컬",body:"햄스트링",tips:"허벅지 뒤 수축 1초"},{name:"플랭크",body:"코어",tips:"30–60초"}],
-          Fri: [{name:"레그 프레스",body:"하체",tips:"시트 엉덩이 뜨면 감량"},{name:"체스트 프레스",body:"가슴",tips:"가벼운 고볼륨"},{name:"시티드 로우",body:"등",tips:"허리 과신전 금지"},{name:"숄더 프레스",body:"어깨",tips:"하강 2초"},{name:"데드버그",body:"코어",tips:"30–45초 2–3세트"}],
-        }},
-      phase2: { name: "2개월차 (근력 향상)", setRep: { mainSets: 3, reps: "8–12", repMin: 8, repMax: 12, rpe: "7–8" },
-        days: {
-          Mon: [{name:"레그 프레스",body:"하체",tips:"중량 도전"},{name:"체스트 프레스",body:"가슴",tips:"수축 집중"},{name:"랫 풀 다운",body:"등",tips:"이완 느리게"},{name:"시티드 로우",body:"등",tips:"뒤로 과젖힘 금지"},{name:"숄더 프레스",body:"어깨",tips:"관절 무리 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"무릎 접기로 가능"}],
-          Wed: [{name:"레그 프레스",body:"하체",tips:"볼륨 낮춰 신경보존"},{name:"체스트 프레스",body:"가슴",tips:"상한 반복 달성 시 증량"},{name:"레그 컬",body:"햄스트링",tips:"발목 털기 금지"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"견갑 고정"},{name:"케이블 컬",body:"이두",tips:"반동 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"15회 목표"}],
-          Fri: [{name:"레그 프레스",body:"하체",tips:"중간중량"},{name:"랫 풀 다운",body:"등",tips:"가슴 들어당김"},{name:"시티드 로우",body:"등",tips:"팔꿈치 경로 일관"},{name:"숄더 프레스",body:"어깨",tips:"통증시 덤벨 대체"},{name:"행잉 레그레이즈",body:"복부",tips:"반동 금지"}],
-        }},
-      phase3: { name: "3개월차 (강도·근비대)", setRep: { mainSets: 4, reps: "8–12", repMin: 8, repMax: 12, rpe: "7–8" },
-        days: {
-          Mon: [{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"랫 풀 다운",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"10–15회"},{name:"케이블 컬",body:"이두",tips:"10–15회"},{name:"행잉 레그레이즈",body:"복부",tips:"15–20회"}],
-          Wed: [{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"}],
-          Fri: [{name:"레그 프레스",body:"하체"},{name:"랫 풀 다운",body:"등"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"},{name:"행잉 레그레이즈",body:"복부"}],
-        }},
+    const PLAN = { phase1:{ name:"1개월차 (자세/감각)", setRep:{mainSets:3,reps:"12–15",repMin:12,repMax:15,rpe:"6–7"}, days:{ Mon:[{name:"레그 프레스",body:"하체",tips:"무릎 완전잠김 금지"},{name:"체스트 프레스",body:"가슴",tips:"견갑 후인이완, 45–60°"},{name:"랫 풀 다운",body:"등",tips:"쇄골/윗가슴까지"},{name:"시티드 로우",body:"등",tips:"팔꿈치로 뒤를 찌르기"},{name:"숄더 프레스",body:"어깨",tips:"승모 과개입 방지"},{name:"플랭크",body:"코어",tips:"30–60초"}],
+      Wed:[{name:"레그 프레스",body:"하체",tips:"하강 2초·상승 1초"},{name:"체스트 프레스",body:"가슴",tips:"손목 꺾임 금지"},{name:"랫 풀 다운",body:"등",tips:"목뒤 금지"},{name:"레그 컬",body:"햄스트링",tips:"허벅지 뒤 수축 1초"},{name:"플랭크",body:"코어",tips:"30–60초"}],
+      Fri:[{name:"레그 프레스",body:"하체",tips:"시트 엉덩이 뜨면 감량"},{name:"체스트 프레스",body:"가슴",tips:"가벼운 고볼륨"},{name:"시티드 로우",body:"등",tips:"허리 과신전 금지"},{name:"숄더 프레스",body:"어깨",tips:"하강 2초"},{name:"데드버그",body:"코어",tips:"30–45초 2–3세트"}]}},
+      phase2:{ name:"2개월차 (근력 향상)", setRep:{mainSets:3,reps:"8–12",repMin:8,repMax:12,rpe:"7–8"}, days:{ Mon:[{name:"레그 프레스",body:"하체",tips:"중량 도전"},{name:"체스트 프레스",body:"가슴",tips:"수축 집중"},{name:"랫 풀 다운",body:"등",tips:"이완 느리게"},{name:"시티드 로우",body:"등",tips:"뒤로 과젖힘 금지"},{name:"숄더 프레스",body:"어깨",tips:"관절 무리 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"무릎 접기로 가능"}],
+      Wed:[{name:"레그 프레스",body:"하체",tips:"볼륨 낮춰 신경보존"},{name:"체스트 프레스",body:"가슴",tips:"상한 반복 달성 시 증량"},{name:"레그 컬",body:"햄스트링",tips:"발목 털기 금지"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"견갑 고정"},{name:"케이블 컬",body:"이두",tips:"반동 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"15회 목표"}],
+      Fri:[{name:"레그 프레스",body:"하체",tips:"중간중량"},{name:"랫 풀 다운",body:"등",tips:"가슴 들어당김"},{name:"시티드 로우",body:"등",tips:"팔꿈치 경로 일관"},{name:"숄더 프레스",body:"어깨",tips:"통증시 덤벨 대체"},{name:"행잉 레그레이즈",body:"복부",tips:"반동 금지"}]}},
+      phase3:{ name:"3개월차 (강도·근비대)", setRep:{mainSets:4,reps:"8–12",repMin:8,repMax:12,rpe:"7–8"}, days:{ Mon:[{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"랫 풀 다운",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"10–15회"},{name:"케이블 컬",body:"이두",tips:"10–15회"},{name:"행잉 레그레이즈",body:"복부",tips:"15–20회"}],
+      Wed:[{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"}],
+      Fri:[{name:"레그 프레스",body:"하체"},{name:"랫 풀 다운",body:"등"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"},{name:"행잉 레그레이즈",body:"복부"}]}}
     };
-
-    const ALL_EXERCISES = ["레그 프레스","체스트 프레스","랫 풀 다운","시티드 로우","숄더 프레스","레그 컬","케이블 푸쉬 다운","케이블 컬","플랭크","데드버그","행잉 레그레이즈"];
-
-    const defaultState = { settings: { startDate: todayStr(), sessionsPerWeek: 3, unit: "kg" }, logs: [] };
-    function loadState(){ try{ const raw=localStorage.getItem(LS_KEY); return raw?{...defaultState,...JSON.parse(raw)}:defaultState; }catch{ return defaultState; } }
-    function saveState(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
-
-    function suggestNextWeight(logs, exercise, repUpper, bump=0.025){
-      const exLogs = logs.filter(l=>l.exercise===exercise).sort((a,b)=>new Date(b.date)-new Date(a.date));
-      if(exLogs.length===0) return null;
-      const sessions={}; for(const l of exLogs){ (sessions[l.date] ||= []).push(l); }
-      const orderedDates = Object.keys(sessions).sort((a,b)=>new Date(b)-new Date(a));
-      const lastTwo = orderedDates.slice(0,2).map(d=>sessions[d]);
-      const lastBest = (arr)=>{ let best=null; for(const s of arr) for(const r of s) if(!best||r.weight>best.weight) best=r; return best; };
-      const best1=lastBest(lastTwo[0]||[]), best2=lastBest(lastTwo[1]||[]);
-      const base=(best1&&best1.weight)||(best2&&best2.weight)||null; if(!base) return null;
-      const hitUpper = lastTwo.every(sess => (sess||[]).some(r => (r.reps||0) >= repUpper));
-      return hitUpper ? Math.round(base*(1+bump)*2)/2 : base;
-    }
-
-    function Stat({label, value}){ return (<div className="rounded-xl border p-3"><div className="text-xs text-gray-500">{label}</div><div className="text-lg font-semibold">{value}</div></div>); }
-
-    function ExerciseCard({exercise, plan, values, onChange, suggest}){
-      const maxSets = plan.setRep.mainSets;
-      return (
-        <div className="rounded-2xl border p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <h3 className="font-semibold">{exercise.name}</h3>
-            <span className="text-xs text-gray-600">{exercise.body||""}</span>
-            {exercise.tips && <span className="ml-auto text-xs px-2 py-1 rounded-full bg-gray-100">{exercise.tips}</span>}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead><tr className="border-b bg-gray-50"><th className="text-left p-2">세트</th><th className="text-right p-2">무게</th><th className="text-right p-2">반복</th><th className="text-right p-2">RPE</th><th className="text-center p-2">완료</th></tr></thead>
-              <tbody>
-                {Array.from({length:maxSets}).map((_,i)=>(
-                  <tr key={i} className="border-b">
-                    <td className="p-2">#{i+1}</td>
-                    <td className="p-2 text-right"><input inputMode="decimal" placeholder="중량" className="w-24 text-right border rounded-lg px-2 py-1" value={values[i]?.weight??""} onChange={(e)=>onChange(i,"weight",e.target.value)} /></td>
-                    <td className="p-2 text-right"><input inputMode="numeric" placeholder="반복" className="w-20 text-right border rounded-lg px-2 py-1" value={values[i]?.reps??""} onChange={(e)=>onChange(i,"reps",e.target.value)} /></td>
-                    <td className="p-2 text-right"><input inputMode="decimal" placeholder="RPE" className="w-20 text-right border rounded-lg px-2 py-1" value={values[i]?.rpe??""} onChange={(e)=>onChange(i,"rpe",e.target.value)} /></td>
-                    <td className="p-2 text-center"><input type="checkbox" checked={!!values[i]?.completed} onChange={(e)=>onChange(i,"completed",e.target.checked)} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="text-xs text-gray-600 mt-2">목표 반복: {plan.setRep.reps} · 상한 달성 2세션 연속 시 다음 세션 <b>+2.5–5%</b> 제안{suggest?` · 현재 제안: ${suggest}kg`:""}</div>
-        </div>
-      );
-    }
-
-    function Settings({state,setState}){
-      const { settings } = state;
-      const [open,setOpen]=useState(false);
-      const [startDate,setStartDate]=useState(settings.startDate);
-      const [sessions,setSessions]=useState(settings.sessionsPerWeek);
-      const [unit,setUnit]=useState(settings.unit);
-      function save(){ setState(prev=>({...prev,settings:{startDate,sessionsPerWeek:clamp(Number(sessions)||3,1,7),unit}})); setOpen(false); }
-      function resetAll(){ if(confirm("모든 로그를 삭제하고 초기화할까요?")){ setState({ settings: { startDate: todayStr(), sessionsPerWeek: 3, unit: "kg" }, logs: [] }); } }
-      return (
-        <div className="relative">
-          <button onClick={()=>setOpen(v=>!v)} className="px-3 py-2 rounded-xl border">⚙ 설정</button>
-          {open && (
-            <div className="absolute right-0 mt-2 w-80 bg-white border rounded-2xl shadow-xl p-4 z-10">
-              <h4 className="font-semibold mb-2">프로그램 설정</h4>
-              <label className="text-sm block mb-2">프로그램 시작일
-                <input type="date" className="block w-full mt-1 border rounded-lg px-3 py-2" value={startDate} onChange={(e)=>setStartDate(e.target.value)} />
-              </label>
-              <label className="text-sm block mb-2">주당 세션 수
-                <input type="number" min="1" max="7" className="block w-full mt-1 border rounded-lg px-3 py-2" value={sessions} onChange={(e)=>setSessions(e.target.value)} />
-              </label>
-              <label className="text-sm block mb-2">단위
-                <select className="block w-full mt-1 border rounded-lg px-3 py-2" value={unit} onChange={(e)=>setUnit(e.target.value)}>
-                  <option value="kg">kg</option><option value="lb">lb</option>
-                </select>
-              </label>
-              <div className="flex justify-between mt-3">
-                <button onClick={resetAll} className="px-3 py-2 rounded-xl border">초기화</button>
-                <div className="space-x-2">
-                  <button onClick={()=>setOpen(false)} className="px-3 py-2 rounded-xl border">취소</button>
-                  <button onClick={save} className="px-3 py-2 rounded-xl bg-black text-white">저장</button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    function Footer(){ return (<div className="text-center text-xs text-gray-500 mt-8">Made for your 12-week plan · 로컬 저장 · 내보내기/가져오기 지원</div>); }
-
-    function App(){
-      const [state,setState] = useState(loadState());
-      const [activeTab,setActiveTab] = useState("today");
-      const [date,setDate] = useState(todayStr());
-      const [dayKey,setDayKey] = useState("Mon");
-      const [note,setNote] = useState("");
-      useEffect(()=>saveState(state),[state]);
-      const week = useMemo(()=>weekNumberFrom(state.settings.startDate,date),[state.settings.startDate,date]);
-      const phase = useMemo(()=>phaseFromWeek(week),[week]);
-      const plan = useMemo(()=>phase===1?PLAN.phase1:phase===2?PLAN.phase2:PLAN.phase3,[phase]);
-      const sessionExercises = plan.days[dayKey] || [];
-      const [sets,setSets] = useState({});
-      useEffect(()=>{
-        const preset={};
-        for(const ex of sessionExercises){
-          const todays = state.logs.filter(l=>l.date===date && l.exercise===ex.name);
-          const maxSets = plan.setRep.mainSets;
-          preset[ex.name] = Array.from({length:maxSets}).map((_,i)=>{
-            const found = todays.find(l=>l.setIndex===i+1);
-            return found || { weight:"", reps:"", rpe:"", completed:false };
-          });
-        }
-        setSets(preset); setNote("");
-      },[date,dayKey,plan.setRep.mainSets,sessionExercises,state.logs]);
-
-      function updateSet(exName,idx,field,value){
-        setSets(prev=>{ const copy={...prev}; const arr=[...(copy[exName]||[])]; arr[idx]={...(arr[idx]||{}),[field]:value}; copy[exName]=arr; return copy; });
-      }
-      function saveToday(){
-        const newLogs = state.logs.filter(l=>l.date!==date);
-        const batch=[];
-        for(const ex of sessionExercises){
-          const exSets = sets[ex.name] || [];
-          exSets.forEach((s,i)=>{
-            if(!s) return;
-            batch.push({ id:`${date}_${ex.name}_${i+1}`, date, exercise: ex.name, setIndex: i+1, weight: Number(s.weight)||0, reps: Number(s.reps)||0, rpe: Number(s.rpe)||0, completed: !!s.completed, notes: note||"" });
-          });
-        }
-        setState(prev=>({ ...prev, logs:[...newLogs, ...batch] }));
-        alert("저장되었습니다 ✅");
-      }
-
-      const todaySummary = useMemo(()=>{
-        const todays = state.logs.filter(l=>l.date===date);
-        return {
-          volume: todays.reduce((a,r)=>a+r.weight*r.reps,0),
-          done: todays.filter(r=>r.completed).length,
-          total: todays.length
-        };
-      },[state.logs,date]);
-
-      const byDate = useMemo(()=>{
-        const map={};
-        for(const l of state.logs){ (map[l.date] ||= {date:l.date, volume:0}).volume += (l.weight||0)*(l.reps||0); }
-        return Object.values(map).sort((a,b)=>new Date(a.date)-new Date(b.date));
-      },[state.logs]);
-
-      const byExerciseBest = useMemo(()=>{
-        const map={}; for(const ex of ALL_EXERCISES) map[ex]=[];
-        const grouped={};
-        for(const l of state.logs){ const key=`${l.exercise}__${l.date}`; (grouped[key] ||= []).push(l); }
-        const entries = Object.entries(grouped).map(([k,arr])=>{ const [exercise,date]=k.split("__"); const maxW=Math.max(...arr.map(r=>r.weight||0)); return {exercise,date,maxW}; });
-        for(const row of entries){ map[row.exercise].push({date:row.date,maxW:row.maxW}); }
-        for(const ex of Object.keys(map)){ map[ex].sort((a,b)=>new Date(a.date)-new Date(b.date)); }
-        return map;
-      },[state.logs]);
-
-      function Header(){
-        return (
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div>
-              <h1 className="text-2xl font-bold">12주 전신 루틴 트래커</h1>
-              <p className="text-sm text-gray-500">{plan.name} · {week}주차 · 세트 {plan.setRep.mainSets} · {plan.setRep.reps}회 · RPE {plan.setRep.rpe}</p>
-            </div>
-            <Settings state={state} setState={setState} />
-          </div>
-        );
-      }
-      function Tabs(){
-        return (
-          <div className="flex gap-2 mb-4">
-            {[{key:"today",label:"Today"},{key:"dashboard",label:"Dashboard"},{key:"log",label:"Log"},{key:"plan",label:"Plan"}].map(t=>(
-              <button key={t.key} onClick={()=>setActiveTab(t.key)} className={`px-3 py-2 rounded-xl border ${activeTab===t.key?"bg-black text-white":"bg-white"}`}>{t.label}</button>
-            ))}
-          </div>
-        );
-      }
-
-      function Today(){
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 space-y-4">
-              <div className="rounded-2xl border p-4">
-                <div className="flex flex-wrap items-end gap-3">
-                  <label className="text-sm">날짜
-                    <input type="date" className="block mt-1 border rounded-lg px-3 py-2" value={date} onChange={(e)=>setDate(e.target.value)} />
-                  </label>
-                  <label className="text-sm">세션 템플릿
-                    <select className="block mt-1 border rounded-lg px-3 py-2" value={dayKey} onChange={(e)=>setDayKey(e.target.value)}>
-                      <option value="Mon">월</option><option value="Wed">수</option><option value="Fri">금</option>
-                    </select>
-                  </label>
-                  <div className="ml-auto text-sm text-gray-600">주차 {week} · 페이즈 {phase}</div>
-                </div>
-              </div>
-
-              {sessionExercises.map(ex=>(
-                <ExerciseCard key={ex.name} exercise={ex} plan={plan} values={sets[ex.name]||[]}
-                  onChange={(idx,field,value)=>updateSet(ex.name,idx,field,value)}
-                  suggest={suggestNextWeight(state.logs, ex.name, plan.setRep.repMax)} />
-              ))}
-
-              <div className="rounded-2xl border p-4">
-                <label className="text-sm">메모/노트
-                  <textarea className="mt-1 w-full border rounded-lg px-3 py-2 min-h-[80px]" placeholder="컨디션, 통증, 수면, 식사 등"
-                    value={note} onChange={(e)=>setNote(e.target.value)} />
-                </label>
-                <div className="flex justify-end mt-3">
-                  <button onClick={saveToday} className="px-4 py-2 rounded-xl bg-black text-white">오늘 기록 저장</button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="rounded-2xl border p-4">
-                <h3 className="font-semibold mb-2">오늘 요약</h3>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <Stat label="완료세트" value={`${todaySummary.done}/${todaySummary.total}`} />
-                  <Stat label="볼륨" value={`${Math.round(todaySummary.volume)} ${state.settings.unit}·회`} />
-                  <Stat label="예상 e1RM" value={(() => {
-                    let best=0; for(const ex of sessionExercises){ const arr = sets[ex.name]||[]; for(const s of arr){ const v = estimate1RM(Number(s.weight), Number(s.reps))||0; best = Math.max(best, v); } }
-                    return best ? `${best}${state.settings.unit}` : "—";
-                  })()} />
-                </div>
-              </div>
-
-              <div className="rounded-2xl border p-4">
-                <h3 className="font-semibold mb-2">자동 증량 제안</h3>
-                <ul className="space-y-1 text-sm">
-                  {sessionExercises.map(ex=>{
-                    const s = suggestNextWeight(state.logs, ex.name, plan.setRep.repMax);
-                    return (<li key={ex.name} className="flex justify-between"><span>{ex.name}</span><span className="text-gray-700">{s?`${s}${state.settings.unit}`:"데이터 부족"}</span></li>);
-                  })}
-                </ul>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      function Dashboard(){
-        const [selectedExercise,setSelectedExercise] = useState("체스트 프레스");
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-2xl border p-4">
-              <div className="flex items-center justify-between mb-2"><h3 className="font-semibold">일자별 총 볼륨</h3></div>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={byDate}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip /><Legend />
-                    <Bar dataKey="volume" name={`볼륨(${state.settings.unit}·회)`} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="font-semibold">운동별 최고중량 추이</h3>
-                <select className="ml-auto border rounded-lg px-3 py-2" value={selectedExercise} onChange={(e)=>setSelectedExercise(e.target.value)}>
-                  {ALL_EXERCISES.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
-                </select>
-              </div>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={byExerciseBest[selectedExercise] || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip /><Legend />
-                    <Line type="monotone" dataKey="maxW" name={`최고중량(${state.settings.unit})`} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      function LogTable(){
-        const [q,setQ] = useState("");
-        const filtered = state.logs
-          .filter(l => [l.exercise, l.date, String(l.weight), String(l.reps)].some(s => String(s).toLowerCase().includes(q.toLowerCase())))
-          .sort((a,b)=> new Date(b.date) - new Date(a.date));
-
-        function exportJSON(){
-          const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url; a.download = `workout_logs_${(new Date()).toISOString().slice(0,10)}.json`; a.click();
-          URL.revokeObjectURL(url);
-        }
-        function importJSON(e){
-          const file = e.target.files?.[0]; if(!file) return;
-          const rd = new FileReader();
-          rd.onload = () => { try { const obj = JSON.parse(rd.result); setState(obj); alert("가져오기가 완료되었습니다."); } catch { alert("JSON 형식이 올바르지 않습니다."); } };
-          rd.readAsText(file);
-        }
-
-        return (
-          <div className="rounded-2xl border p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <input placeholder="검색(운동/날짜/무게/반복)" className="border rounded-lg px-3 py-2 w-full" value={q} onChange={(e)=>setQ(e.target.value)} />
-              <button onClick={exportJSON} className="px-3 py-2 rounded-xl border">JSON 내보내기</button>
-              <label className="px-3 py-2 rounded-xl border cursor-pointer">JSON 가져오기<input type="file" accept="application/json" className="hidden" onChange={importJSON} /></label>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead><tr className="border-b bg-gray-50"><th className="text-left p-2">날짜</th><th className="text-left p-2">운동</th><th className="text-right p-2">세트</th><th className="text-right p-2">무게</th><th className="text-right p-2">반복</th><th className="text-right p-2">RPE</th><th className="text-center p-2">완료</th><th className="text-left p-2">메모</th></tr></thead>
-                <tbody>
-                  {filtered.map(l=>(
-                    <tr key={l.id} className="border-b hover:bg-gray-50/60">
-                      <td className="p-2">{l.date}</td><td className="p-2">{l.exercise}</td><td className="p-2 text-right">{l.setIndex}</td>
-                      <td className="p-2 text-right">{l.weight}{state.settings.unit}</td><td className="p-2 text-right">{l.reps}</td>
-                      <td className="p-2 text-right">{l.rpe}</td><td className="p-2 text-center">{l.completed?"✅":"—"}</td><td className="p-2">{l.notes}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      }
-
-      function PlanView(){
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {[PLAN.phase1, PLAN.phase2, PLAN.phase3].map((ph, idx) => (
-              <div key={idx} className="rounded-2xl border p-4">
-                <h3 className="font-semibold mb-1">{ph.name}</h3>
-                <p className="text-sm text-gray-600 mb-2">세트 {ph.setRep.mainSets} · {ph.setRep.reps}회 · RPE {ph.setRep.rpe}</p>
-                {Object.entries(ph.days).map(([k, arr]) => (
-                  <div key={k} className="mb-3">
-                    <div className="text-xs font-semibold text-gray-500 mb-1">{k==="Mon"?"월":k==="Wed"?"수":"금"}</div>
-                    <ul className="text-sm list-disc pl-5 space-y-1">
-                      {arr.map(ex => (<li key={ex.name}><span className="font-medium">{ex.name}</span> <span className="text-gray-600">{ex.tips?`· ${ex.tips}`:""}</span></li>))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ))}
-            <div className="rounded-2xl border p-4 lg:col-span-3">
-              <h4 className="font-semibold mb-2">운영 가이드</h4>
-              <ul className="text-sm list-disc pl-5 space-y-1">
-                <li>세트 간 휴식 60–90초 (8–12회 고중량 세트는 최대 120초 허용)</li>
-                <li>상한 반복(예: 12회)을 2회 연속 세션에서 달성하면 다음 세션에 2.5–5% 증량</li>
-                <li>통증 지속 시 가동범위/무게 조절, 필요시 델로드(1주간 50–70% 볼륨)</li>
-                <li>워밍업: 트레드밀 5–8분 + 첫 두 메인운동 워밍업 2세트(10회→5회)</li>
-                <li>마무리: 사용 부위 정적 스트레칭 30–45초 × 2</li>
-              </ul>
-            </div>
-          </div>
-        );
-      }
-
-      function AppShell(){ return (<div><Header /><Tabs />{activeTab==="today"&&<Today />}{activeTab==="dashboard"&&<Dashboard />}{activeTab==="log"&&<LogTable />}{activeTab==="plan"&&<PlanView />}<Footer /></div>); }
-
+    const ALL_EXERCISES=["레그 프레스","체스트 프레스","랫 풀 다운","시티드 로우","숄더 프레스","레그 컬","케이블 푸쉬 다운","케이블 컬","플랭크","데드버그","행잉 레그레이즈"];
+    const defaultState={settings:{startDate:todayStr(),sessionsPerWeek:3,unit:"kg"},logs:[]};
+    function loadState(){try{const raw=localStorage.getItem(LS_KEY);return raw?{...defaultState,...JSON.parse(raw)}:defaultState;}catch{return defaultState;}}
+    function saveState(s){localStorage.setItem(LS_KEY, JSON.stringify(s));}
+    function suggestNextWeight(logs,exercise,repUpper,bump=0.025){const exLogs=logs.filter(l=>l.exercise===exercise).sort((a,b)=>new Date(b.date)-new Date(a.date));if(exLogs.length===0)return null;const sessions={};for(const l of exLogs){(sessions[l.date] ||= []).push(l);}const orderedDates=Object.keys(sessions).sort((a,b)=>new Date(b)-new Date(a));const lastTwo=orderedDates.slice(0,2).map(d=>sessions[d]);const lastBest=(arr)=>{let best=null;for(const s of arr)for(const r of s)if(!best||r.weight>best.weight)best=r;return best;};const best1=lastBest(lastTwo[0]||[]),best2=lastBest(lastTwo[1]||[]);const base=(best1&&best1.weight)||(best2&&best2.weight)||null;if(!base)return null;const hitUpper=lastTwo.every(sess=>(sess||[]).some(r=>(r.reps||0)>=repUpper));return hitUpper?Math.round(base*(1+bump)*2)/2:base;}
+    function Stat({label,value}){return(<div className="rounded-xl border p-3"><div className="text-xs text-gray-500">{label}</div><div className="text-lg font-semibold">{value}</div></div>);}
+    function ExerciseCard({exercise,plan,values,onChange,suggest}){const maxSets=plan.setRep.mainSets;return(<div className="rounded-2xl border p-4"><div className="flex items-center gap-2 mb-2"><h3 className="font-semibold">{exercise.name}</h3><span className="text-xs text-gray-600">{exercise.body||""}</span>{exercise.tips&&(<span className="ml-auto text-xs px-2 py-1 rounded-full bg-gray-100">{exercise.tips}</span>)}</div><div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="border-b bg-gray-50"><th className="text-left p-2">세트</th><th className="text-right p-2">무게</th><th className="text-right p-2">반복</th><th className="text-right p-2">RPE</th><th className="text-center p-2">완료</th></tr></thead><tbody>{Array.from({length:maxSets}).map((_,i)=>(<tr key={i} className="border-b"><td className="p-2">#{i+1}</td><td className="p-2 text-right"><input inputMode="decimal" placeholder="중량" className="w-24 text-right border rounded-lg px-2 py-1" value={values[i]?.weight??""} onChange={(e)=>onChange(i,"weight",e.target.value)} /></td><td className="p-2 text-right"><input inputMode="numeric" placeholder="반복" className="w-20 text-right border rounded-lg px-2 py-1" value={values[i]?.reps??""} onChange={(e)=>onChange(i,"reps",e.target.value)} /></td><td className="p-2 text-right"><input inputMode="decimal" placeholder="RPE" className="w-20 text-right border rounded-lg px-2 py-1" value={values[i]?.rpe??""} onChange={(e)=>onChange(i,"rpe",e.target.value)} /></td><td className="p-2 text-center"><input type="checkbox" checked={!!values[i]?.completed} onChange={(e)=>onChange(i,"completed",e.target.checked)} /></td></tr>))}</tbody></table></div><div className="text-xs text-gray-600 mt-2">목표 반복: {plan.setRep.reps} · 상한 달성 2세션 연속 시 다음 세션 <b>+2.5–5%</b> 제안{suggest?` · 현재 제안: ${suggest}kg`:""}</div></div>);}
+    function Settings({state,setState}){const {settings}=state;const [open,setOpen]=React.useState(false);const [startDate,setStartDate]=React.useState(settings.startDate);const [sessions,setSessions]=React.useState(settings.sessionsPerWeek);const [unit,setUnit]=React.useState(settings.unit);function save(){setState(prev=>({...prev,settings:{startDate,sessionsPerWeek:Math.max(1,Math.min(7,Number(sessions)||3)),unit}}));setOpen(false);}function resetAll(){if(confirm("모든 로그를 삭제하고 초기화할까요?")){setState({settings:{startDate:todayStr(),sessionsPerWeek:3,unit:"kg"},logs:[]});}}return(<div className="relative"><button onClick={()=>setOpen(v=>!v)} className="px-3 py-2 rounded-xl border">⚙ 설정</button>{open&&(<div className="absolute right-0 mt-2 w-80 bg-white border rounded-2xl shadow-xl p-4 z-10"><h4 className="font-semibold mb-2">프로그램 설정</h4><label className="text-sm block mb-2">프로그램 시작일<input type="date" className="block w-full mt-1 border rounded-lg px-3 py-2" value={startDate} onChange={(e)=>setStartDate(e.target.value)} /></label><label className="text-sm block mb-2">주당 세션 수<input type="number" min="1" max="7" className="block w-full mt-1 border rounded-lg px-3 py-2" value={sessions} onChange={(e)=>setSessions(e.target.value)} /></label><label className="text-sm block mb-2">단위<select className="block w-full mt-1 border rounded-lg px-3 py-2" value={unit} onChange={(e)=>setUnit(e.target.value)}><option value="kg">kg</option><option value="lb">lb</option></select></label><div className="flex justify-between mt-3"><button onClick={resetAll} className="px-3 py-2 rounded-xl border">초기화</button><div className="space-x-2"><button onClick={()=>setOpen(false)} className="px-3 py-2 rounded-xl border">취소</button><button onClick={save} className="px-3 py-2 rounded-xl bg-black text-white">저장</button></div></div></div>)}</div>);}
+    function Footer(){return(<div className="text-center text-xs text-gray-500 mt-8">Made for your 12-week plan · 로컬 저장 · 내보내기/가져오기 지원</div>);}
+    function App(){const [state,setState]=useState(loadState());const [activeTab,setActiveTab]=useState("today");const [date,setDate]=useState(todayStr());const [dayKey,setDayKey]=useState("Mon");const [note,setNote]=useState("");useEffect(()=>saveState(state),[state]);const week=useMemo(()=>weekNumberFrom(state.settings.startDate,date),[state.settings.startDate,date]);const phase=useMemo(()=>phaseFromWeek(week),[week]);const plan=useMemo(()=>phase===1?PLAN.phase1:phase===2?PLAN.phase2:PLAN.phase3,[phase]);const sessionExercises=plan.days[dayKey]||[];const [sets,setSets]=useState({});useEffect(()=>{const preset={};for(const ex of sessionExercises){const todays=state.logs.filter(l=>l.date===date&&l.exercise===ex.name);const maxSets=plan.setRep.mainSets;preset[ex.name]=Array.from({length:maxSets}).map((_,i)=>{const found=todays.find(l=>l.setIndex===i+1);return found||{weight:"",reps:"",rpe:"",completed:false};});}setSets(preset);setNote("");},[date,dayKey,plan.setRep.mainSets,sessionExercises,state.logs]);function updateSet(exName,idx,field,value){setSets(prev=>{const copy={...prev};const arr=[...(copy[exName]||[])];arr[idx]={...(arr[idx]||{}),[field]:value};copy[exName]=arr;return copy;});}function saveToday(){const newLogs=state.logs.filter(l=>l.date!==date);const batch=[];for(const ex of sessionExercises){(sets[ex.name]||[]).forEach((s,i)=>{if(!s)return;batch.push({id:`${date}_${ex.name}_${i+1}`,date,exercise:ex.name,setIndex:i+1,weight:Number(s.weight)||0,reps:Number(s.reps)||0,rpe:Number(s.rpe)||0,completed:!!s.completed,notes:note||""});});}setState(prev=>({...prev,logs:[...newLogs,...batch]}));alert("저장되었습니다 ✅");}
+      const todaySummary=useMemo(()=>{const todays=state.logs.filter(l=>l.date===date);return{volume:todays.reduce((a,r)=>a+r.weight*r.reps,0),done:todays.filter(r=>r.completed).length,total:todays.length};},[state.logs,date]);
+      const byDate=useMemo(()=>{const map={};for(const l of state.logs){(map[l.date] ||= {date:l.date,volume:0}).volume+=(l.weight||0)*(l.reps||0);}return Object.values(map).sort((a,b)=>new Date(a.date)-new Date(b.date));},[state.logs]);
+      const byExerciseBest=useMemo(()=>{const map={};ALL_EXERCISES.forEach(ex=>map[ex]=[]);const grouped={};for(const l of state.logs){const k=`${l.exercise}__${l.date}`;(grouped[k] ||= []).push(l);}Object.entries(grouped).forEach(([k,arr])=>{const [exercise,date]=k.split("__");const maxW=Math.max(...arr.map(r=>r.weight||0));(map[exercise] ||= []).push({date,maxW});});Object.keys(map).forEach(ex=>map[ex].sort((a,b)=>new Date(a.date)-new Date(b.date)));return map;},[state.logs]);
+      function Header(){return(<div className="flex items-center justify-between gap-4 mb-4"><div><h1 className="text-2xl font-bold">12주 전신 루틴 트래커</h1><p className="text-sm text-gray-500">{plan.name} · {week}주차 · 세트 {plan.setRep.mainSets} · {plan.setRep.reps}회 · RPE {plan.setRep.rpe}</p></div><Settings state={state} setState={setState} /></div>);}
+      function Tabs(){return(<div className="flex gap-2 mb-4">{[{key:"today",label:"Today"},{key:"dashboard",label:"Dashboard"},{key:"log",label:"Log"},{key:"plan",label:"Plan"}].map(t=>(<button key={t.key} onClick={()=>setActiveTab(t.key)} className={`px-3 py-2 rounded-xl border ${activeTab===t.key?"bg-black text-white":"bg-white"}`}>{t.label}</button>))}</div>);}
+      function Today(){return(<div className="grid grid-cols-1 lg:grid-cols-3 gap-4"><div className="lg:col-span-2 space-y-4"><div className="rounded-2xl border p-4"><div className="flex flex-wrap items-end gap-3"><label className="text-sm">날짜<input type="date" className="block mt-1 border rounded-lg px-3 py-2" value={date} onChange={(e)=>setDate(e.target.value)} /></label><label className="text-sm">세션 템플릿<select className="block mt-1 border rounded-lg px-3 py-2" value={dayKey} onChange={(e)=>setDayKey(e.target.value)}><option value="Mon">월</option><option value="Wed">수</option><option value="Fri">금</option></select></label><div className="ml-auto text-sm text-gray-600">주차 {week} · 페이즈 {phase}</div></div></div>{(plan.days[dayKey]||[]).map(ex=>(<ExerciseCard key={ex.name} exercise={ex} plan={plan} values={sets[ex.name]||[]} onChange={(idx,field,value)=>updateSet(ex.name,idx,field,value)} suggest={(()=>{const repMax=plan.setRep.repMax;return suggestNextWeight(state.logs,ex.name,repMax);})()} />))}<div className="rounded-2xl border p-4"><label className="text-sm">메모/노트<textarea className="mt-1 w-full border rounded-lg px-3 py-2 min-h-[80px]" placeholder="컨디션, 통증, 수면, 식사 등" value={note} onChange={(e)=>setNote(e.target.value)} /></label><div className="flex justify-end mt-3"><button onClick={saveToday} className="px-4 py-2 rounded-xl bg-black text-white">오늘 기록 저장</button></div></div></div><div className="space-y-4"><div className="rounded-2xl border p-4"><h3 className="font-semibold mb-2">오늘 요약</h3><div className="grid grid-cols-3 gap-2 text-center"><Stat label="완료세트" value={`${todaySummary.done}/${todaySummary.total}`} /><Stat label="볼륨" value={`${Math.round(todaySummary.volume)} ${state.settings.unit}·회`} /><Stat label="예상 e1RM" value={(()=>{let best=0;for(const ex of (plan.days[dayKey]||[])){const arr=sets[ex.name]||[];for(const s of arr){const v=estimate1RM(Number(s.weight),Number(s.reps))||0;best=Math.max(best,v);}}return best?`${best}${state.settings.unit}`:"—";})()} /></div></div><div className="rounded-2xl border p-4"><h3 className="font-semibold mb-2">자동 증량 제안</h3><ul className="space-y-1 text-sm">{(plan.days[dayKey]||[]).map(ex=>{const s=suggestNextWeight(state.logs,ex.name,plan.setRep.repMax);return(<li key={ex.name} className="flex justify-between"><span>{ex.name}</span><span className="text-gray-700">{s?`${s}${state.settings.unit}`:"데이터 부족"}</span></li>);})}</ul></div></div></div>);}
+      function Dashboard(){const [selectedExercise,setSelectedExercise]=useState("체스트 프레스");return(<div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><div className="rounded-2xl border p-4"><div className="flex items-center justify-between mb-2"><h3 className="font-semibold">일자별 총 볼륨</h3></div><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={byDate}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{fontSize:12}} /><YAxis tick={{fontSize:12}} /><Tooltip /><Legend /><Bar dataKey="volume" name={`볼륨(${state.settings.unit}·회)`} /></BarChart></ResponsiveContainer></div></div><div className="rounded-2xl border p-4"><div className="flex items-center gap-3 mb-2"><h3 className="font-semibold">운동별 최고중량 추이</h3><select className="ml-auto border rounded-lg px-3 py-2" value={selectedExercise} onChange={(e)=>setSelectedExercise(e.target.value)}>{ALL_EXERCISES.map(ex=>(<option key={ex} value={ex}>{ex}</option>))}</select></div><div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={(byExerciseBest[selectedExercise]||[])}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{fontSize:12}} /><YAxis tick={{fontSize:12}} /><Tooltip /><Legend /><Line type="monotone" dataKey="maxW" name={`최고중량(${state.settings.unit})`} /></LineChart></ResponsiveContainer></div></div></div>);}
+      function LogTable(){const [q,setQ]=useState("");const filtered=state.logs.filter(l=>[l.exercise,l.date,String(l.weight),String(l.reps)].some(s=>String(s).toLowerCase().includes(q.toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date));function exportJSON(){const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`workout_logs_${(new Date()).toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}function importJSON(e){const file=e.target.files?.[0];if(!file)return;const rd=new FileReader();rd.onload=()=>{try{const obj=JSON.parse(rd.result);setState(obj);alert("가져오기가 완료되었습니다.");}catch{alert("JSON 형식이 올바르지 않습니다.");}};rd.readAsText(file);}return(<div className="rounded-2xl border p-4 space-y-3"><div className="flex items-center gap-2"><input placeholder="검색(운동/날짜/무게/반복)" className="border rounded-lg px-3 py-2 w-full" value={q} onChange={(e)=>setQ(e.target.value)} /><button onClick={exportJSON} className="px-3 py-2 rounded-xl border">JSON 내보내기</button><label className="px-3 py-2 rounded-xl border cursor-pointer">JSON 가져오기<input type="file" accept="application/json" className="hidden" onChange={importJSON} /></label></div><div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="border-b bg-gray-50"><th className="text-left p-2">날짜</th><th className="text-left p-2">운동</th><th className="text-right p-2">세트</th><th className="text-right p-2">무게</th><th className="text-right p-2">반복</th><th className="text-right p-2">RPE</th><th className="text-center p-2">완료</th><th className="text-left p-2">메모</th></tr></thead><tbody>{filtered.map(l=>(<tr key={l.id} className="border-b hover:bg-gray-50/60"><td className="p-2">{l.date}</td><td className="p-2">{l.exercise}</td><td className="p-2 text-right">{l.setIndex}</td><td className="p-2 text-right">{l.weight}{state.settings.unit}</td><td className="p-2 text-right">{l.reps}</td><td className="p-2 text-right">{l.rpe}</td><td className="p-2 text-center">{l.completed?"✅":"—"}</td><td className="p-2">{l.notes}</td></tr>))}</tbody></table></div></div>);}
+      function PlanView(){return(<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">{[PLAN.phase1,PLAN.phase2,PLAN.phase3].map((ph,idx)=>(<div key={idx} className="rounded-2xl border p-4"><h3 className="font-semibold mb-1">{ph.name}</h3><p className="text-sm text-gray-600 mb-2">세트 {ph.setRep.mainSets} · {ph.setRep.reps}회 · RPE {ph.setRep.rpe}</p>{Object.entries(ph.days).map(([k,arr])=>(
+        <div key={k} className="mb-3"><div className="text-xs font-semibold text-gray-500 mb-1">{k==="Mon"?"월":k==="Wed"?"수":"금"}</div><ul className="text-sm list-disc pl-5 space-y-1">{arr.map(ex=>(<li key={ex.name}><span className="font-medium">{ex.name}</span> <span className="text-gray-600">{ex.tips?`· ${ex.tips}`:""}</span></li>))}</ul></div>))}</div>))}<div className="rounded-2xl border p-4 lg:col-span-3"><h4 className="font-semibold mb-2">운영 가이드</h4><ul className="text-sm list-disc pl-5 space-y-1"><li>세트 간 휴식 60–90초 (8–12회 고중량 세트는 최대 120초 허용)</li><li>상한 반복을 2회 연속 달성하면 다음 세션 2.5–5% 증량</li><li>통증 지속 시 가동범위/무게 조절, 필요시 델로드(1주 50–70% 볼륨)</li><li>워밍업: 트레드밀 5–8분 + 메인 2종 워밍업 2세트(10회→5회)</li><li>마무리: 정적 스트레칭 30–45초 × 2</li></ul></div></div>);}
+      function AppShell(){return(<div><Header /><Tabs />{activeTab==="today"&&<Today />}{activeTab==="dashboard"&&<Dashboard />}{activeTab==="log"&&<LogTable />}{activeTab==="plan"&&<PlanView />}<Footer /></div>);}
       const root = ReactDOM.createRoot(document.getElementById('root'));
       root.render(<App />);
     </script>
