@@ -18,11 +18,13 @@
   <div id="root" class="container mx-auto p-4 md:p-6 lg:p-8"></div>
 
   <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(console.error);
-      });
-    }
+    /*
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(console.error);
+  });
+}
+*/
   </script>
 
   <script type="text/babel" data-presets="env,react">
