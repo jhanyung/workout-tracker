@@ -1,7 +1,7 @@
 {
   "name": "12주 운동 트래커",
   "short_name": "운동 트래커",
-  "start_url": ".?v=3",
+  "start_url": ".?v=4",
   "display": "standalone",
   "background_color": "#111111",
   "theme_color": "#111111",
