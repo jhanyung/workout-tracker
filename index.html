@@ -7,459 +7,426 @@
   <title>12주 운동 트래커</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon-192.png" />
-  <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React / ReactDOM (jsDelivr) -->
-  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Recharts (jsDelivr) -->
-  <script src="https://cdn.jsdelivr.net/npm/recharts@3.2.1/umd/Recharts.min.js"></script>
-  <!-- Babel -->
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.3/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>html, body { background:#fff; } .container { max-width: 1120px; }</style>
 </head>
 <body class="min-h-screen">
-  <div id="root" class="container mx-auto p-4 md:p-6 lg:p-8"></div>
-  <div id="err" class="hidden fixed bottom-3 left-3 right-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3"></div>
+  <div class="container mx-auto p-4 md:p-6 lg:p-8">
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <div>
+        <h1 class="text-2xl font-bold">12주 전신 루틴 트래커</h1>
+        <p id="phaseText" class="text-sm text-gray-500"></p>
+      </div>
+      <div class="relative" id="settingsWrap">
+        <button id="btnSettings" class="px-3 py-2 rounded-xl border">⚙ 설정</button>
+        <div id="settingsPanel" class="hidden absolute right-0 mt-2 w-80 bg-white border rounded-2xl shadow-xl p-4 z-10">
+          <h4 class="font-semibold mb-2">프로그램 설정</h4>
+          <label class="text-sm block mb-2">프로그램 시작일
+            <input id="startDate" type="date" class="block w-full mt-1 border rounded-lg px-3 py-2" />
+          </label>
+          <label class="text-sm block mb-2">주당 세션 수
+            <input id="sessionsPerWeek" type="number" min="1" max="7" class="block w-full mt-1 border rounded-lg px-3 py-2" />
+          </label>
+          <label class="text-sm block mb-2">단위
+            <select id="unit" class="block w-full mt-1 border rounded-lg px-3 py-2">
+              <option value="kg">kg</option><option value="lb">lb</option>
+            </select>
+          </label>
+          <div class="flex justify-between mt-3">
+            <button id="btnReset" class="px-3 py-2 rounded-xl border">초기화</button>
+            <div class="space-x-2">
+              <button id="btnCancelSettings" class="px-3 py-2 rounded-xl border">취소</button>
+              <button id="btnSaveSettings" class="px-3 py-2 rounded-xl bg-black text-white">저장</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-2 mb-4">
+      <button class="tab px-3 py-2 rounded-xl border bg-black text-white" data-tab="today">Today</button>
+      <button class="tab px-3 py-2 rounded-xl border" data-tab="dashboard">Dashboard</button>
+      <button class="tab px-3 py-2 rounded-xl border" data-tab="log">Log</button>
+      <button class="tab px-3 py-2 rounded-xl border" data-tab="plan">Plan</button>
+    </div>
+
+    <!-- Today -->
+    <section id="tab-today" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 space-y-4">
+        <div class="rounded-2xl border p-4">
+          <div class="flex flex-wrap items-end gap-3">
+            <label class="text-sm">날짜
+              <input id="date" type="date" class="block mt-1 border rounded-lg px-3 py-2" />
+            </label>
+            <label class="text-sm">세션 템플릿
+              <select id="dayKey" class="block mt-1 border rounded-lg px-3 py-2">
+                <option value="Mon">월</option><option value="Wed">수</option><option value="Fri">금</option>
+              </select>
+            </label>
+            <div class="ml-auto text-sm text-gray-600" id="weekPhase"></div>
+          </div>
+        </div>
+
+        <div id="exerciseCards" class="space-y-4"></div>
+
+        <div class="rounded-2xl border p-4">
+          <label class="text-sm">메모/노트
+            <textarea id="note" class="mt-1 w-full border rounded-lg px-3 py-2 min-h-[80px]" placeholder="컨디션, 통증, 수면, 식사 등"></textarea>
+          </label>
+          <div class="flex justify-end mt-3">
+            <button id="btnSaveToday" class="px-4 py-2 rounded-xl bg-black text-white">오늘 기록 저장</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="rounded-2xl border p-4">
+          <h3 class="font-semibold mb-2">오늘 요약</h3>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-xl border p-3"><div class="text-xs text-gray-500">완료세트</div><div class="text-lg font-semibold" id="doneSets">—</div></div>
+            <div class="rounded-xl border p-3"><div class="text-xs text-gray-500">볼륨</div><div class="text-lg font-semibold" id="todayVolume">—</div></div>
+            <div class="rounded-xl border p-3"><div class="text-xs text-gray-500">예상 e1RM</div><div class="text-lg font-semibold" id="est1RM">—</div></div>
+          </div>
+        </div>
+        <div class="rounded-2xl border p-4">
+          <h3 class="font-semibold mb-2">자동 증량 제안</h3>
+          <ul id="suggestList" class="space-y-1 text-sm"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-2xl border p-4">
+        <div class="flex items-center justify-between mb-2"><h3 class="font-semibold">일자별 총 볼륨</h3></div>
+        <div class="h-64"><canvas id="chartVolume"></canvas></div>
+      </div>
+      <div class="rounded-2xl border p-4">
+        <div class="flex items-center gap-3 mb-2">
+          <h3 class="font-semibold">운동별 최고중량 추이</h3>
+          <select id="exerciseSelect" class="ml-auto border rounded-lg px-3 py-2"></select>
+        </div>
+        <div class="h-64"><canvas id="chartBest"></canvas></div>
+      </div>
+    </section>
+
+    <!-- Log -->
+    <section id="tab-log" class="hidden">
+      <div class="rounded-2xl border p-4 space-y-3">
+        <div class="flex items-center gap-2">
+          <input id="search" placeholder="검색(운동/날짜/무게/반복)" class="border rounded-lg px-3 py-2 w-full" />
+          <button id="btnExport" class="px-3 py-2 rounded-xl border">JSON 내보내기</button>
+          <label class="px-3 py-2 rounded-xl border cursor-pointer">JSON 가져오기<input id="fileImport" type="file" accept="application/json" class="hidden" /></label>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead><tr class="border-b bg-gray-50"><th class="text-left p-2">날짜</th><th class="text-left p-2">운동</th><th class="text-right p-2">세트</th><th class="text-right p-2">무게</th><th class="text-right p-2">반복</th><th class="text-right p-2">RPE</th><th class="text-center p-2">완료</th><th class="text-left p-2">메모</th></tr></thead>
+            <tbody id="logRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plan -->
+    <section id="tab-plan" class="hidden">
+      <div id="planWrap" class="grid grid-cols-1 lg:grid-cols-3 gap-4"></div>
+      <div class="rounded-2xl border p-4 lg:col-span-3 mt-4">
+        <h4 class="font-semibold mb-2">운영 가이드</h4>
+        <ul class="text-sm list-disc pl-5 space-y-1">
+          <li>세트 간 휴식 60–90초 (8–12회 고중량 세트는 최대 120초 허용)</li>
+          <li>상한 반복을 2회 연속 달성하면 다음 세션 2.5–5% 증량</li>
+          <li>통증 지속 시 가동범위/무게 조절, 필요시 델로드(1주 50–70% 볼륨)</li>
+          <li>워밍업: 트레드밀 5–8분 + 메인 2종 워밍업 2세트(10회→5회)</li>
+          <li>마무리: 정적 스트레칭 30–45초 × 2</li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="text-center text-xs text-gray-500 mt-8">Made for your 12-week plan · 로컬 저장 · 내보내기/가져오기 지원</div>
+  </div>
 
   <script>
-    // SW on
+    // SW enable
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('./sw.js').then(function(reg){ console.log('SW v5', reg.scope); }).catch(console.error);
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.error));
+    }
+
+    // Data & helpers
+    const LS_KEY = "workout_tracker_v1";
+    const todayStr = () => new Date().toISOString().slice(0,10);
+    const clamp = (n,min,max)=>Math.max(min,Math.min(max,n));
+    function weekNumberFrom(startDate, targetDate) {
+      const s = new Date(startDate), t = new Date(targetDate);
+      const diff = Math.floor((t - s) / 86400000);
+      return Math.max(1, Math.floor(diff / 7) + 1);
+    }
+    function phaseFromWeek(week){ return week<=4?1:week<=8?2:3; }
+    function estimate1RM(weight, reps){ if (!weight||!reps) return null; return Math.round(weight*(1+reps/30)); }
+
+    const PLAN = {
+      phase1: { name:"1개월차 (자세/감각)", setRep:{mainSets:3,reps:"12–15",repMin:12,repMax:15,rpe:"6–7"}, days:{
+        Mon:[{name:"레그 프레스",body:"하체",tips:"무릎 완전잠김 금지"},{name:"체스트 프레스",body:"가슴",tips:"견갑 후인이완, 45–60°"},{name:"랫 풀 다운",body:"등",tips:"쇄골/윗가슴까지"},{name:"시티드 로우",body:"등",tips:"팔꿈치로 뒤를 찌르기"},{name:"숄더 프레스",body:"어깨",tips:"승모 과개입 방지"},{name:"플랭크",body:"코어",tips:"30–60초"}],
+        Wed:[{name:"레그 프레스",body:"하체",tips:"하강 2초·상승 1초"},{name:"체스트 프레스",body:"가슴",tips:"손목 꺾임 금지"},{name:"랫 풀 다운",body:"등",tips:"목뒤 금지"},{name:"레그 컬",body:"햄스트링",tips:"허벅지 뒤 수축 1초"},{name:"플랭크",body:"코어",tips:"30–60초"}],
+        Fri:[{name:"레그 프레스",body:"하체",tips:"시트 엉덩이 뜨면 감량"},{name:"체스트 프레스",body:"가슴",tips:"가벼운 고볼륨"},{name:"시티드 로우",body:"등",tips:"허리 과신전 금지"},{name:"숄더 프레스",body:"어깨",tips:"하강 2초"},{name:"데드버그",body:"코어",tips:"30–45초 2–3세트"}],
+      }},
+      phase2: { name:"2개월차 (근력 향상)", setRep:{mainSets:3,reps:"8–12",repMin:8,repMax:12,rpe:"7–8"}, days:{
+        Mon:[{name:"레그 프레스",body:"하체",tips:"중량 도전"},{name:"체스트 프레스",body:"가슴",tips:"수축 집중"},{name:"랫 풀 다운",body:"등",tips:"이완 느리게"},{name:"시티드 로우",body:"등",tips:"뒤로 과젖힘 금지"},{name:"숄더 프레스",body:"어깨",tips:"관절 무리 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"무릎 접기로 가능"}],
+        Wed:[{name:"레그 프레스",body:"하체",tips:"볼륨 낮춰 신경보존"},{name:"체스트 프레스",body:"가슴",tips:"상한 반복 달성 시 증량"},{name:"레그 컬",body:"햄스트링",tips:"발목 털기 금지"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"견갑 고정"},{name:"케이블 컬",body:"이두",tips:"반동 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"15회 목표"}],
+        Fri:[{name:"레그 프레스",body:"하체",tips:"중간중량"},{name:"랫 풀 다운",body:"등",tips:"가슴 들어당김"},{name:"시티드 로우",body:"등",tips:"팔꿈치 경로 일관"},{name:"숄더 프레스",body:"어깨",tips:"통증시 덤벨 대체"},{name:"행잉 레그레이즈",body:"복부",tips:"반동 금지"}],
+      }},
+      phase3: { name:"3개월차 (강도·근비대)", setRep:{mainSets:4,reps:"8–12",repMin:8,repMax:12,rpe:"7–8"}, days:{
+        Mon:[{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"랫 풀 다운",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"10–15회"},{name:"케이블 컬",body:"이두",tips:"10–15회"},{name:"행잉 레그레이즈",body:"복부",tips:"15–20회"}],
+        Wed:[{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"}],
+        Fri:[{name:"레그 프레스",body:"하체"},{name:"랫 풀 다운",body:"등"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"},{name:"행잉 레그레이즈",body:"복부"}],
+      }},
+    };
+    const ALL_EXERCISES = ["레그 프레스","체스트 프레스","랫 풀 다운","시티드 로우","숄더 프레스","레그 컬","케이블 푸쉬 다운","케이블 컬","플랭크","데드버그","행잉 레그레이즈"];
+
+    // State
+    let state = { settings: { startDate: todayStr(), sessionsPerWeek: 3, unit: "kg" }, logs: [] };
+    function loadState(){ try { const s = localStorage.getItem(LS_KEY); if (s) state = JSON.parse(s); } catch(e) {} }
+    function saveState(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+    // UI helpers
+    function qs(sel){ return document.querySelector(sel); }
+    function el(tag, cls){ const e=document.createElement(tag); if(cls) e.className=cls; return e; }
+
+    function renderPhaseText(){
+      const date = qs('#date').value;
+      const week = weekNumberFrom(state.settings.startDate, date);
+      const phase = phaseFromWeek(week);
+      qs('#phaseText').textContent = `${phase===1?PLAN.phase1.name:phase===2?PLAN.phase2.name:PLAN.phase3.name} · ${week}주차 · 세트 ${(phase===1?PLAN.phase1:phase===2?PLAN.phase2:PLAN.phase3).setRep.mainSets} · 반복 ${(phase===1?PLAN.phase1:phase===2?PLAN.phase2:PLAN.phase3).setRep.reps}`;
+      qs('#weekPhase').textContent = `주차 ${week} · 페이즈 ${phase}`;
+    }
+
+    function suggestNextWeight(exercise, repUpper){
+      const exLogs = state.logs.filter(l=>l.exercise===exercise).sort((a,b)=>new Date(b.date)-new Date(a.date));
+      if (exLogs.length===0) return null;
+      const sessions={}; exLogs.forEach(l=>{ (sessions[l.date]||(sessions[l.date]=[])).push(l); });
+      const dates = Object.keys(sessions).sort((a,b)=>new Date(b)-new Date(a));
+      const lastTwo = dates.slice(0,2).map(d=>sessions[d]);
+      const lastBest = arr => { let best=null; arr.forEach(s=>s.forEach(r=>{ if(!best||r.weight>best.weight) best=r; })); return best; };
+      const best1=lastBest(lastTwo[0]||[]), best2=lastBest(lastTwo[1]||[]);
+      const base=(best1&&best1.weight)||(best2&&best2.weight)||null; if(!base) return null;
+      const hitUpper = lastTwo.every(sess => (sess||[]).some(r => (r.reps||0) >= repUpper));
+      return hitUpper ? Math.round(base*1.025*2)/2 : base;
+    }
+
+    function renderExercises(){
+      const date = qs('#date').value;
+      const dayKey = qs('#dayKey').value;
+      const week = weekNumberFrom(state.settings.startDate, date);
+      const phase = phaseFromWeek(week);
+      const plan = phase===1?PLAN.phase1:phase===2?PLAN.phase2:PLAN.phase3;
+      const cont = qs('#exerciseCards'); cont.innerHTML='';
+
+      const todays = state.logs.filter(l=>l.date===date);
+      const grouped = {};
+      todays.forEach(l=>{ (grouped[l.exercise]||(grouped[l.exercise]=[]))[l.setIndex-1]=l; });
+
+      plan.days[dayKey].forEach(ex=>{
+        const card = el('div','rounded-2xl border p-4');
+        card.innerHTML = `
+          <div class="flex items-center gap-2 mb-2">
+            <h3 class="font-semibold">${ex.name}</h3>
+            <span class="text-xs text-gray-600">${ex.body||""}</span>
+            ${ex.tips?`<span class="ml-auto text-xs px-2 py-1 rounded-full bg-gray-100">${ex.tips}</span>`:""}
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead><tr class="border-b bg-gray-50"><th class="text-left p-2">세트</th><th class="text-right p-2">무게</th><th class="text-right p-2">반복</th><th class="text-right p-2">RPE</th><th class="text-center p-2">완료</th></tr></thead>
+              <tbody>
+                ${Array.from({length:plan.setRep.mainSets}).map((_,i)=>{
+                  const v = (grouped[ex.name]||[])[i] || {};
+                  return `
+                  <tr class="border-b">
+                    <td class="p-2">#${i+1}</td>
+                    <td class="p-2 text-right"><input data-ex="${ex.name}" data-idx="${i}" data-f="weight" inputmode="decimal" placeholder="중량" class="w-24 text-right border rounded-lg px-2 py-1" value="${v.weight||""}" /></td>
+                    <td class="p-2 text-right"><input data-ex="${ex.name}" data-idx="${i}" data-f="reps" inputmode="numeric" placeholder="반복" class="w-20 text-right border rounded-lg px-2 py-1" value="${v.reps||""}" /></td>
+                    <td class="p-2 text-right"><input data-ex="${ex.name}" data-idx="${i}" data-f="rpe" inputmode="decimal" placeholder="RPE" class="w-20 text-right border rounded-lg px-2 py-1" value="${v.rpe||""}" /></td>
+                    <td class="p-2 text-center"><input type="checkbox" data-ex="${ex.name}" data-idx="${i}" data-f="completed" ${v.completed?"checked":""} /></td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="text-xs text-gray-600 mt-2">목표 반복: ${plan.setRep.reps} · 상한 달성 2세션 연속 시 다음 세션 <b>+2.5–5%</b> 제안 · 현재 제안: <b>${(suggestNextWeight(ex.name, plan.setRep.repMax)||"데이터 부족")}${suggestNextWeight(ex.name, plan.setRep.repMax)?state.settings.unit:""}</b></div>
+        `;
+        cont.appendChild(card);
+      });
+
+      // attach change listeners
+      cont.querySelectorAll('input').forEach(inp=>{
+        inp.addEventListener('change', e=>{
+          const ex = inp.getAttribute('data-ex');
+          const idx = parseInt(inp.getAttribute('data-idx'),10);
+          const field = inp.getAttribute('data-f');
+          const key = `${date}_${ex}_${idx+1}`;
+          // remove existing record for this set
+          state.logs = state.logs.filter(l=> !(l.id===key));
+          const weight = field==='weight' ? Number(inp.value)||0 : Number((cont.querySelector(`input[data-ex="${ex}"][data-idx="${idx}"][data-f="weight"]`)||{}).value)||0;
+          const reps = field==='reps' ? Number(inp.value)||0 : Number((cont.querySelector(`input[data-ex="${ex}"][data-idx="${idx}"][data-f="reps"]`)||{}).value)||0;
+          const rpe = field==='rpe' ? Number(inp.value)||0 : Number((cont.querySelector(`input[data-ex="${ex}"][data-idx="${idx}"][data-f="rpe"]`)||{}).value)||0;
+          const completed = field==='completed' ? inp.checked : (cont.querySelector(`input[type="checkbox"][data-ex="${ex}"][data-idx="${idx}"][data-f="completed"]`)||{}).checked || false;
+          state.logs.push({ id:key, date, exercise:ex, setIndex:idx+1, weight, reps, rpe, completed, notes: qs('#note').value||"" });
+          saveState();
+          renderSummary();
+        });
+      });
+      renderSummary();
+      renderSuggestions();
+    }
+
+    function renderSummary(){
+      const date = qs('#date').value;
+      const unit = state.settings.unit;
+      const todays = state.logs.filter(l=>l.date===date);
+      const volume = todays.reduce((a,r)=>a+(r.weight||0)*(r.reps||0),0);
+      const done = todays.filter(r=>r.completed).length;
+      qs('#todayVolume').textContent = Math.round(volume)+" "+unit+"·회";
+      qs('#doneSets').textContent = done+"/"+todays.length;
+
+      // e1RM best of today's sets
+      let best=0;
+      todays.forEach(s=>{ const v=estimate1RM(Number(s.weight),Number(s.reps))||0; if (v>best) best=v; });
+      qs('#est1RM').textContent = best? (best+unit) : "—";
+    }
+
+    function renderSuggestions(){
+      const date = qs('#date').value;
+      const week = weekNumberFrom(state.settings.startDate, date);
+      const phase = phaseFromWeek(week);
+      const plan = phase===1?PLAN.phase1:phase===2?PLAN.phase2:PLAN.phase3;
+      const dayKey = qs('#dayKey').value;
+      const ul = qs('#suggestList'); ul.innerHTML='';
+      plan.days[dayKey].forEach(ex=>{
+        const s = suggestNextWeight(ex.name, plan.setRep.repMax);
+        const li = el('li','flex justify-between'); li.innerHTML=`<span>${ex.name}</span><span class="text-gray-700">${s? s+state.settings.unit : "데이터 부족"}</span>`;
+        ul.appendChild(li);
       });
     }
-    function showErr(msg){
-      var el = document.getElementById('err');
-      el.textContent = msg;
-      el.classList.remove('hidden');
+
+    function renderPlan(){
+      const wrap = qs('#planWrap'); wrap.innerHTML='';
+      [PLAN.phase1, PLAN.phase2, PLAN.phase3].forEach(ph=>{
+        const card = el('div','rounded-2xl border p-4');
+        const daysHtml = Object.entries(ph.days).map(([k, arr])=>{
+          return `<div class="mb-3">
+            <div class="text-xs font-semibold text-gray-500 mb-1">${k==="Mon"?"월":k==="Wed"?"수":"금"}</div>
+            <ul class="text-sm list-disc pl-5 space-y-1">
+              ${arr.map(ex=>`<li><span class="font-medium">${ex.name}</span> <span class="text-gray-600">${ex.tips?`· ${ex.tips}`:""}</span></li>`).join('')}
+            </ul>
+          </div>`;
+        }).join('');
+        card.innerHTML = `<h3 class="font-semibold mb-1">${ph.name}</h3><p class="text-sm text-gray-600 mb-2">세트 ${ph.setRep.mainSets} · ${ph.setRep.reps}회 · RPE ${ph.setRep.rpe}</p>${daysHtml}`;
+        wrap.appendChild(card);
+      });
     }
+
+    function renderLog(){
+      const q = qs('#search').value.toLowerCase();
+      const unit = state.settings.unit;
+      const rows = qs('#logRows'); rows.innerHTML='';
+      state.logs
+        .filter(l=>[l.exercise,l.date,String(l.weight),String(l.reps)].some(s=>String(s).toLowerCase().includes(q)))
+        .sort((a,b)=>new Date(b.date)-new Date(a.date))
+        .forEach(l=>{
+          const tr = el('tr','border-b hover:bg-gray-50/60');
+          tr.innerHTML = `<td class="p-2">${l.date}</td><td class="p-2">${l.exercise}</td><td class="p-2 text-right">${l.setIndex}</td><td class="p-2 text-right">${l.weight}${unit}</td><td class="p-2 text-right">${l.reps}</td><td class="p-2 text-right">${l.rpe}</td><td class="p-2 text-center">${l.completed?"✅":"—"}</td><td class="p-2">${l.notes||""}</td>`;
+          rows.appendChild(tr);
+        });
+    }
+
+    function buildCharts(){
+      // Volume per day
+      const byDateMap = {};
+      state.logs.forEach(l=>{ (byDateMap[l.date]||(byDateMap[l.date]={date:l.date,volume:0})).volume += (l.weight||0)*(l.reps||0); });
+      const byDate = Object.values(byDateMap).sort((a,b)=>new Date(a.date)-new Date(b.date));
+      const labels1 = byDate.map(r=>r.date);
+      const data1 = byDate.map(r=>r.volume);
+      const ctx1 = document.getElementById('chartVolume');
+      if (window._chart1) window._chart1.destroy();
+      window._chart1 = new Chart(ctx1, {
+        type: 'bar',
+        data: { labels: labels1, datasets: [{ label: '볼륨', data: data1 }] },
+        options: { responsive:true, maintainAspectRatio:false }
+      });
+
+      // Best weight by exercise
+      const exSel = qs('#exerciseSelect');
+      if (!exSel.options.length){ ALL_EXERCISES.forEach(ex=>{ const opt=document.createElement('option'); opt.value=ex; opt.textContent=ex; exSel.appendChild(opt); }); }
+      const ex = exSel.value || ALL_EXERCISES[0];
+      const grouped = {};
+      state.logs.forEach(l=>{ if (l.exercise!==ex) return; (grouped[l.date]||(grouped[l.date]=[])).push(l); });
+      const dates = Object.keys(grouped).sort((a,b)=>new Date(a)-new Date(b));
+      const labels2 = dates;
+      const data2 = dates.map(d => Math.max(...grouped[d].map(r=>r.weight||0)));
+      const ctx2 = document.getElementById('chartBest');
+      if (window._chart2) window._chart2.destroy();
+      window._chart2 = new Chart(ctx2, {
+        type: 'line',
+        data: { labels: labels2, datasets: [{ label: '최고중량', data: data2, tension:0.3 }] },
+        options: { responsive:true, maintainAspectRatio:false }
+      });
+    }
+
+    // Events
+    document.querySelectorAll('.tab').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('.tab').forEach(b=>b.classList.remove('bg-black','text-white'));
+        btn.classList.add('bg-black','text-white');
+        const t = btn.getAttribute('data-tab');
+        ['today','dashboard','log','plan'].forEach(id=>{
+          qs('#tab-'+id).classList.toggle('hidden', id!==t);
+        });
+        if (t==='dashboard'){ buildCharts(); }
+        if (t==='log'){ renderLog(); }
+        if (t==='plan'){ renderPlan(); }
+      });
+    });
+    qs('#btnSettings').addEventListener('click', ()=>{ qs('#settingsPanel').classList.toggle('hidden'); });
+    qs('#btnCancelSettings').addEventListener('click', ()=>{ qs('#settingsPanel').classList.add('hidden'); });
+    qs('#btnSaveSettings').addEventListener('click', ()=>{
+      state.settings.startDate = qs('#startDate').value || todayStr();
+      state.settings.sessionsPerWeek = clamp(parseInt(qs('#sessionsPerWeek').value||'3',10),1,7);
+      state.settings.unit = qs('#unit').value || 'kg';
+      saveState(); qs('#settingsPanel').classList.add('hidden'); renderPhaseText(); renderExercises();
+    });
+    qs('#btnReset').addEventListener('click', ()=>{
+      if (confirm('모든 로그를 삭제하고 초기화할까요?')){ state={ settings:{ startDate: todayStr(), sessionsPerWeek:3, unit:'kg' }, logs:[] }; saveState(); init(); }
+    });
+    qs('#btnSaveToday').addEventListener('click', ()=>{ saveState(); alert('저장되었습니다 ✅'); });
+
+    qs('#exerciseSelect').addEventListener('change', buildCharts);
+    qs('#search').addEventListener('input', renderLog);
+    ['date','dayKey'].forEach(id=>qs('#'+id).addEventListener('change', ()=>{ renderPhaseText(); renderExercises(); }));
+
+    // Export/Import
+    qs('#btnExport').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href=url; a.download='workout_logs_'+todayStr()+'.json'; a.click(); URL.revokeObjectURL(url);
+    });
+    qs('#fileImport').addEventListener('change', (e)=>{
+      const file = e.target.files && e.target.files[0]; if (!file) return;
+      const rd = new FileReader();
+      rd.onload = ()=>{ try{ state = JSON.parse(rd.result); saveState(); init(); alert('가져오기가 완료되었습니다.'); } catch{ alert('JSON 형식이 올바르지 않습니다.'); } };
+      rd.readAsText(file);
+    });
+
+    // Init
+    function init(){
+      loadState();
+      qs('#startDate').value = state.settings.startDate;
+      qs('#sessionsPerWeek').value = state.settings.sessionsPerWeek;
+      qs('#unit').value = state.settings.unit;
+      qs('#date').value = todayStr();
+      qs('#dayKey').value = 'Mon';
+      renderPhaseText();
+      renderExercises();
+    }
+    init();
   </script>
-
-  <script type="text/babel" data-presets="env,react">
-    try {
-      const { useState, useEffect, useMemo } = React;
-      const { LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer, BarChart, Bar } = Recharts;
-
-      const LS_KEY = "workout_tracker_v1";
-      const formatDate = (d) => new Date(d).toISOString().slice(0,10);
-      const todayStr = () => formatDate(new Date());
-      const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-      function weekNumberFrom(startDate, targetDate) { const s=new Date(startDate), t=new Date(targetDate); const diff=Math.floor((t-s)/86400000); return Math.max(1, Math.floor(diff/7)+1); }
-      function phaseFromWeek(week){ return week<=4?1:week<=8?2:3; }
-      function estimate1RM(w,r){ if(!w||!r) return null; return Math.round(w*(1+r/30)); }
-
-      const PLAN = {
-        phase1:{ name:"1개월차 (자세/감각)", setRep:{mainSets:3,reps:"12–15",repMin:12,repMax:15,rpe:"6–7"},
-          days:{ Mon:[{name:"레그 프레스",body:"하체",tips:"무릎 완전잠김 금지"},{name:"체스트 프레스",body:"가슴",tips:"견갑 후인이완, 45–60°"},{name:"랫 풀 다운",body:"등",tips:"쇄골/윗가슴까지"},{name:"시티드 로우",body:"등",tips:"팔꿈치로 뒤를 찌르기"},{name:"숄더 프레스",body:"어깨",tips:"승모 과개입 방지"},{name:"플랭크",body:"코어",tips:"30–60초"}],
-                 Wed:[{name:"레그 프레스",body:"하체",tips:"하강 2초·상승 1초"},{name:"체스트 프레스",body:"가슴",tips:"손목 꺾임 금지"},{name:"랫 풀 다운",body:"등",tips:"목뒤 금지"},{name:"레그 컬",body:"햄스트링",tips:"허벅지 뒤 수축 1초"},{name:"플랭크",body:"코어",tips:"30–60초"}],
-                 Fri:[{name:"레그 프레스",body:"하체",tips:"시트 엉덩이 뜨면 감량"},{name:"체스트 프레스",body:"가슴",tips:"가벼운 고볼륨"},{name:"시티드 로우",body:"등",tips:"허리 과신전 금지"},{name:"숄더 프레스",body:"어깨",tips:"하강 2초"},{name:"데드버그",body:"코어",tips:"30–45초 2–3세트"}] } },
-        phase2:{ name:"2개월차 (근력 향상)", setRep:{mainSets:3,reps:"8–12",repMin:8,repMax:12,rpe:"7–8"},
-          days:{ Mon:[{name:"레그 프레스",body:"하체",tips:"중량 도전"},{name:"체스트 프레스",body:"가슴",tips:"수축 집중"},{name:"랫 풀 다운",body:"등",tips:"이완 느리게"},{name:"시티드 로우",body:"등",tips:"뒤로 과젖힘 금지"},{name:"숄더 프레스",body:"어깨",tips:"관절 무리 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"무릎 접기로 가능"}],
-                 Wed:[{name:"레그 프레스",body:"하체",tips:"볼륨 낮춰 신경보존"},{name:"체스트 프레스",body:"가슴",tips:"상한 반복 달성 시 증량"},{name:"레그 컬",body:"햄스트링",tips:"발목 털기 금지"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"견갑 고정"},{name:"케이블 컬",body:"이두",tips:"반동 금지"},{name:"행잉 레그레이즈",body:"복부",tips:"15회 목표"}],
-                 Fri:[{name:"레그 프레스",body:"하체",tips:"중간중량"},{name:"랫 풀 다운",body:"등",tips:"가슴 들어당김"},{name:"시티드 로우",body:"등",tips:"팔꿈치 경로 일관"},{name:"숄더 프레스",body:"어깨",tips:"통증시 덤벨 대체"},{name:"행잉 레그레이즈",body:"복부",tips:"반동 금지"}] } },
-        phase3:{ name:"3개월차 (강도·근비대)", setRep:{mainSets:4,reps:"8–12",repMin:8,repMax:12,rpe:"7–8"},
-          days:{ Mon:[{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"랫 풀 다운",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두",tips:"10–15회"},{name:"케이블 컬",body:"이두",tips:"10–15회"},{name:"행잉 레그레이즈",body:"복부",tips:"15–20회"}],
-                 Wed:[{name:"레그 프레스",body:"하체"},{name:"체스트 프레스",body:"가슴"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"}],
-                 Fri:[{name:"레그 프레스",body:"하체"},{name:"랫 풀 다운",body:"등"},{name:"시티드 로우",body:"등"},{name:"숄더 프레스",body:"어깨"},{name:"케이블 푸쉬 다운",body:"삼두"},{name:"케이블 컬",body:"이두"},{name:"행잉 레그레이즈",body:"복부"}] } }
-      };
-
-      var ALL_EXERCISES = ["레그 프레스","체스트 프레스","랫 풀 다운","시티드 로우","숄더 프레스","레그 컬","케이블 푸쉬 다운","케이블 컬","플랭크","데드버그","행잉 레그레이즈"];
-      var defaultState = { settings: { startDate: todayStr(), sessionsPerWeek: 3, unit: "kg" }, logs: [] };
-      function loadState(){ try { var raw = localStorage.getItem(LS_KEY); return raw ? Object.assign({}, defaultState, JSON.parse(raw)) : defaultState; } catch(e) { return defaultState; } }
-      function saveState(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
-
-      function suggestNextWeight(logs, exercise, repUpper, bump){
-        if (bump === undefined) bump = 0.025;
-        var exLogs = logs.filter(function(l){ return l.exercise === exercise; }).sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-        if (exLogs.length === 0) return null;
-        var sessions = {};
-        for (var i=0;i<exLogs.length;i++){ var l = exLogs[i]; if (!sessions[l.date]) sessions[l.date] = []; sessions[l.date].push(l); }
-        var orderedDates = Object.keys(sessions).sort(function(a,b){ return new Date(b) - new Date(a); });
-        var lastTwo = orderedDates.slice(0,2).map(function(d){ return sessions[d]; });
-        function lastBest(arr){ var best=null; if(!arr) return null; for (var i=0;i<arr.length;i++){ var set=arr[i]; for (var j=0;j<set.length;j++){ var r=set[j]; if (!best || r.weight > best.weight) best = r; } } return best; }
-        var best1 = lastBest(lastTwo[0] || []), best2 = lastBest(lastTwo[1] || []);
-        var base = (best1 && best1.weight) || (best2 && best2.weight) || null;
-        if (!base) return null;
-        function hitUpper(sess){ if(!sess) return false; for (var i=0;i<sess.length;i++){ if ((sess[i].reps || 0) >= repUpper) return true; } return false; }
-        var both = hitUpper(lastTwo[0]) && hitUpper(lastTwo[1]);
-        return both ? Math.round(base * (1 + bump) * 2) / 2 : base;
-      }
-
-      function Stat(props){ return (<div className="rounded-xl border p-3"><div className="text-xs text-gray-500">{props.label}</div><div className="text-lg font-semibold">{props.value}</div></div>); }
-
-      function ExerciseCard(props){
-        var exercise = props.exercise, plan = props.plan, values = props.values || [], onChange = props.onChange, suggest = props.suggest;
-        var maxSets = plan.setRep.mainSets;
-        return (
-          <div className="rounded-2xl border p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-semibold">{exercise.name}</h3>
-              <span className="text-xs text-gray-600">{exercise.body||""}</span>
-              {exercise.tips && (<span className="ml-auto text-xs px-2 py-1 rounded-full bg-gray-100">{exercise.tips}</span>)}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead><tr className="border-b bg-gray-50"><th className="text-left p-2">세트</th><th className="text-right p-2">무게</th><th className="text-right p-2">반복</th><th className="text-right p-2">RPE</th><th className="text-center p-2">완료</th></tr></thead>
-                <tbody>
-                  {Array.from({length:maxSets}).map((_,i)=>(
-                    <tr key={i} className="border-b">
-                      <td className="p-2">#{i+1}</td>
-                      <td className="p-2 text-right"><input inputMode="decimal" placeholder="중량" className="w-24 text-right border rounded-lg px-2 py-1" value={(values[i]&&values[i].weight)||""} onChange={(e)=>onChange(i,"weight",e.target.value)} /></td>
-                      <td className="p-2 text-right"><input inputMode="numeric" placeholder="반복" className="w-20 text-right border rounded-lg px-2 py-1" value={(values[i]&&values[i].reps)||""} onChange={(e)=>onChange(i,"reps",e.target.value)} /></td>
-                      <td className="p-2 text-right"><input inputMode="decimal" placeholder="RPE" className="w-20 text-right border rounded-lg px-2 py-1" value={(values[i]&&values[i].rpe)||""} onChange={(e)=>onChange(i,"rpe",e.target.value)} /></td>
-                      <td className="p-2 text-center"><input type="checkbox" checked={!!(values[i]&&values[i].completed)} onChange={(e)=>onChange(i,"completed",e.target.checked)} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="text-xs text-gray-600 mt-2">목표 반복: {plan.setRep.reps} · 상한 달성 2세션 연속 시 다음 세션 <b>+2.5–5%</b> 제안{suggest?(" · 현재 제안: "+suggest+"kg"):""}</div>
-          </div>
-        );
-      }
-
-      function Settings(props){
-        var state = props.state, setState = props.setState;
-        var settings = state.settings;
-        const [open, setOpen] = useState(false);
-        const [startDate, setStartDate] = useState(settings.startDate);
-        const [sessions, setSessions] = useState(settings.sessionsPerWeek);
-        const [unit, setUnit] = useState(settings.unit);
-        function save(){ setState(function(prev){ return Object.assign({}, prev, { settings: { startDate: startDate, sessionsPerWeek: clamp(Number(sessions)||3,1,7), unit: unit } }); }); setOpen(false); }
-        function resetAll(){ if (confirm("모든 로그를 삭제하고 초기화할까요?")){ setState({ settings: { startDate: todayStr(), sessionsPerWeek: 3, unit: "kg" }, logs: [] }); } }
-        return (
-          <div className="relative">
-            <button onClick={function(){ setOpen(function(v){ return !v; }); }} className="px-3 py-2 rounded-xl border">⚙ 설정</button>
-            {open && (
-              <div className="absolute right-0 mt-2 w-80 bg-white border rounded-2xl shadow-xl p-4 z-10">
-                <h4 className="font-semibold mb-2">프로그램 설정</h4>
-                <label className="text-sm block mb-2">프로그램 시작일
-                  <input type="date" className="block w-full mt-1 border rounded-lg px-3 py-2" value={startDate} onChange={function(e){ setStartDate(e.target.value); }} />
-                </label>
-                <label className="text-sm block mb-2">주당 세션 수
-                  <input type="number" min="1" max="7" className="block w-full mt-1 border rounded-lg px-3 py-2" value={sessions} onChange={function(e){ setSessions(e.target.value); }} />
-                </label>
-                <label className="text-sm block mb-2">단위
-                  <select className="block w-full mt-1 border rounded-lg px-3 py-2" value={unit} onChange={function(e){ setUnit(e.target.value); }}>
-                    <option value="kg">kg</option><option value="lb">lb</option>
-                  </select>
-                </label>
-                <div className="flex justify-between mt-3">
-                  <button onClick={resetAll} className="px-3 py-2 rounded-xl border">초기화</button>
-                  <div className="space-x-2">
-                    <button onClick={function(){ setOpen(false); }} className="px-3 py-2 rounded-xl border">취소</button>
-                    <button onClick={save} className="px-3 py-2 rounded-xl bg-black text-white">저장</button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      function Footer(){ return (<div className="text-center text-xs text-gray-500 mt-8">Made for your 12-week plan · 로컬 저장 · 내보내기/가져오기 지원</div>); }
-
-      function App(){
-        const [state, setState] = useState(loadState());
-        const [activeTab, setActiveTab] = useState("today");
-        const [date, setDate] = useState(todayStr());
-        const [dayKey, setDayKey] = useState("Mon");
-        const [note, setNote] = useState("");
-        useEffect(function(){ saveState(state); }, [state]);
-        const week = useMemo(function(){ return weekNumberFrom(state.settings.startDate, date); }, [state.settings.startDate, date]);
-        const phase = useMemo(function(){ return phaseFromWeek(week); }, [week]);
-        const plan = useMemo(function(){ return phase===1?PLAN.phase1:phase===2?PLAN.phase2:PLAN.phase3; }, [phase]);
-        const sessionExercises = plan.days[dayKey] || [];
-        const [sets, setSets] = useState({});
-        useEffect(function(){
-          var preset = {};
-          for (var i=0;i<sessionExercises.length;i++){
-            var ex = sessionExercises[i];
-            var todays = state.logs.filter(function(l){ return l.date===date && l.exercise===ex.name; });
-            var maxSets = plan.setRep.mainSets;
-            preset[ex.name] = Array.from({length:maxSets}).map(function(_,idx){
-              var found = null;
-              for (var k=0;k<todays.length;k++){ if (todays[k].setIndex === idx+1) { found = todays[k]; break; } }
-              return found || { weight: "", reps: "", rpe: "", completed: false };
-            });
-          }
-          setSets(preset); setNote("");
-        }, [date, dayKey, plan.setRep.mainSets, sessionExercises, state.logs]);
-
-        function updateSet(exName, idx, field, value){
-          setSets(function(prev){
-            var copy = Object.assign({}, prev);
-            var arr = (copy[exName] || []).slice();
-            var obj = Object.assign({}, arr[idx] || {});
-            obj[field] = value;
-            arr[idx] = obj;
-            copy[exName] = arr;
-            return copy;
-          });
-        }
-
-        function saveToday(){
-          var newLogs = state.logs.filter(function(l){ return l.date !== date; });
-          var batch = [];
-          for (var i=0;i<sessionExercises.length;i++){
-            var ex = sessionExercises[i];
-            var exSets = sets[ex.name] || [];
-            for (var j=0;j<exSets.length;j++){
-              var s = exSets[j]; if (!s) continue;
-              batch.push({ id: date+"_"+ex.name+"_"+(j+1), date: date, exercise: ex.name, setIndex: j+1, weight: Number(s.weight)||0, reps: Number(s.reps)||0, rpe: Number(s.rpe)||0, completed: !!s.completed, notes: note||"" });
-            }
-          }
-          setState(function(prev){ return { settings: prev.settings, logs: newLogs.concat(batch) }; });
-          alert("저장되었습니다 ✅");
-        }
-
-        const todaySummary = useMemo(function(){
-          var todays = state.logs.filter(function(l){ return l.date === date; });
-          var volume = 0; for (var i=0;i<todays.length;i++){ volume += (todays[i].weight||0) * (todays[i].reps||0); }
-          var done = 0; for (var i=0;i<todays.length;i++){ if (todays[i].completed) done++; }
-          return { volume: volume, done: done, total: todays.length };
-        }, [state.logs, date]);
-
-        const byDate = useMemo(function(){
-          var map = {};
-          for (var i=0;i<state.logs.length;i++){
-            var l = state.logs[i];
-            if (!map[l.date]) map[l.date] = { date: l.date, volume: 0 };
-            map[l.date].volume += (l.weight||0) * (l.reps||0);
-          }
-          return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
-        }, [state.logs]);
-
-        const byExerciseBest = useMemo(function(){
-          var map = {}; for (var i=0;i<ALL_EXERCISES.length;i++){ map[ALL_EXERCISES[i]] = []; }
-          var grouped = {};
-          for (var i=0;i<state.logs.length;i++){
-            var l = state.logs[i]; var key = l.exercise + "__" + l.date;
-            if (!grouped[key]) grouped[key] = [];
-            grouped[key].push(l);
-          }
-          var keys = Object.keys(grouped);
-          for (var i=0;i<keys.length;i++){
-            var k = keys[i]; var arr = grouped[k];
-            var ex = k.split("__")[0]; var date = k.split("__")[1];
-            var maxW = 0; for (var j=0;j<arr.length;j++){ if ((arr[j].weight||0) > maxW) maxW = arr[j].weight||0; }
-            map[ex].push({ date: date, maxW: maxW });
-          }
-          var exs = Object.keys(map);
-          for (var i=0;i<exs.length;i++){ map[exs[i]].sort(function(a,b){ return new Date(a.date) - new Date(b.date); }); }
-          return map;
-        }, [state.logs]);
-
-        function Header(){
-          return (
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <h1 className="text-2xl font-bold">12주 전신 루틴 트래커</h1>
-                <p className="text-sm text-gray-500">{plan.name} · {week}주차 · 세트 {plan.setRep.mainSets} · {plan.setRep.reps}회 · RPE {plan.setRep.rpe}</p>
-              </div>
-              <Settings state={state} setState={setState} />
-            </div>
-          );
-        }
-        function Tabs(){
-          const tabs = [{key:"today",label:"Today"},{key:"dashboard",label:"Dashboard"},{key:"log",label:"Log"},{key:"plan",label:"Plan"}];
-          return (
-            <div className="flex gap-2 mb-4">
-              {tabs.map(function(t){
-                return (<button key={t.key} onClick={function(){ setActiveTab(t.key); }} className={"px-3 py-2 rounded-xl border " + (activeTab===t.key ? "bg-black text-white" : "bg-white")}>{t.label}</button>);
-              })}
-            </div>
-          );
-        }
-
-        function Today(){
-          return (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 space-y-4">
-                <div className="rounded-2xl border p-4">
-                  <div className="flex flex-wrap items-end gap-3">
-                    <label className="text-sm">날짜
-                      <input type="date" className="block mt-1 border rounded-lg px-3 py-2" value={date} onChange={function(e){ setDate(e.target.value); }} />
-                    </label>
-                    <label className="text-sm">세션 템플릿
-                      <select className="block mt-1 border rounded-lg px-3 py-2" value={dayKey} onChange={function(e){ setDayKey(e.target.value); }}>
-                        <option value="Mon">월</option><option value="Wed">수</option><option value="Fri">금</option>
-                      </select>
-                    </label>
-                    <div className="ml-auto text-sm text-gray-600">주차 {week} · 페이즈 {phase}</div>
-                  </div>
-                </div>
-
-                {sessionExercises.map(function(ex){
-                  return (<ExerciseCard key={ex.name} exercise={ex} plan={plan} values={sets[ex.name]||[]} onChange={function(idx,field,value){ updateSet(ex.name,idx,field,value); }} suggest={suggestNextWeight(state.logs, ex.name, plan.setRep.repMax)} />);
-                })}
-
-                <div className="rounded-2xl border p-4">
-                  <label className="text-sm">메모/노트
-                    <textarea className="mt-1 w-full border rounded-lg px-3 py-2 min-h-[80px]" placeholder="컨디션, 통증, 수면, 식사 등" value={note} onChange={function(e){ setNote(e.target.value); }} />
-                  </label>
-                  <div className="flex justify-end mt-3">
-                    <button onClick={saveToday} className="px-4 py-2 rounded-xl bg-black text-white">오늘 기록 저장</button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="rounded-2xl border p-4">
-                  <h3 className="font-semibold mb-2">오늘 요약</h3>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <Stat label="완료세트" value={todaySummary.done + "/" + todaySummary.total} />
-                    <Stat label="볼륨" value={Math.round(todaySummary.volume) + " " + state.settings.unit + "·회"} />
-                    <Stat label="예상 e1RM" value={(function(){ var best=0; for(var i=0;i<sessionExercises.length;i++){ var arr=sets[sessionExercises[i].name]||[]; for(var j=0;j<arr.length;j++){ var s=arr[j]; var v=estimate1RM(Number(s.weight), Number(s.reps))||0; if(v>best) best=v; } } return best ? (best + state.settings.unit) : "—"; })()} />
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border p-4">
-                  <h3 className="font-semibold mb-2">자동 증량 제안</h3>
-                  <ul className="space-y-1 text-sm">
-                    {sessionExercises.map(function(ex){
-                      var s = suggestNextWeight(state.logs, ex.name, plan.setRep.repMax);
-                      return (<li key={ex.name} className="flex justify-between"><span>{ex.name}</span><span className="text-gray-700">{s ? (s + state.settings.unit) : "데이터 부족"}</span></li>);
-                    })}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          );
-        }
-
-        function Dashboard(){
-          const [selectedExercise, setSelectedExercise] = useState("체스트 프레스");
-          return (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center justify-between mb-2"><h3 className="font-semibold">일자별 총 볼륨</h3></div>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={byDate}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip /><Legend />
-                      <Bar dataKey="volume" name={"볼륨(" + state.settings.unit + "·회)"} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="font-semibold">운동별 최고중량 추이</h3>
-                  <select className="ml-auto border rounded-lg px-3 py-2" value={selectedExercise} onChange={function(e){ setSelectedExercise(e.target.value); }}>
-                    {ALL_EXERCISES.map(function(ex){ return (<option key={ex} value={ex}>{ex}</option>); })}
-                  </select>
-                </div>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={byExerciseBest[selectedExercise] || []}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip /><Legend />
-                      <Line type="monotone" dataKey="maxW" name={"최고중량(" + state.settings.unit + ")"} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          );
-        }
-
-        function LogTable(){
-          const [q, setQ] = useState("");
-          const filtered = state.logs
-            .filter(function(l){ var arr=[l.exercise, l.date, String(l.weight), String(l.reps)]; for (var i=0;i<arr.length;i++){ if (String(arr[i]).toLowerCase().indexOf(q.toLowerCase()) !== -1) return true; } return false; })
-            .sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-
-          function exportJSON(){
-            const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url; a.download = "workout_logs_" + (new Date()).toISOString().slice(0,10) + ".json";
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-          function importJSON(e){
-            var file = (e.target.files && e.target.files[0]) ? e.target.files[0] : null;
-            if (!file) return;
-            const rd = new FileReader();
-            rd.onload = function(){ try { const obj = JSON.parse(rd.result); setState(obj); alert("가져오기가 완료되었습니다."); } catch (err) { alert("JSON 형식이 올바르지 않습니다."); } };
-            rd.readAsText(file);
-          }
-
-          return (
-            <div className="rounded-2xl border p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <input placeholder="검색(운동/날짜/무게/반복)" className="border rounded-lg px-3 py-2 w-full" value={q} onChange={function(e){ setQ(e.target.value); }} />
-                <button onClick={exportJSON} className="px-3 py-2 rounded-xl border">JSON 내보내기</button>
-                <label className="px-3 py-2 rounded-xl border cursor-pointer">JSON 가져오기<input type="file" accept="application/json" className="hidden" onChange={importJSON} /></label>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead><tr className="border-b bg-gray-50"><th className="text-left p-2">날짜</th><th className="text-left p-2">운동</th><th className="text-right p-2">세트</th><th className="text-right p-2">무게</th><th className="text-right p-2">반복</th><th className="text-right p-2">RPE</th><th className="text-center p-2">완료</th><th className="text-left p-2">메모</th></tr></thead>
-                  <tbody>
-                    {filtered.map(function(l){
-                      return (<tr key={l.id} className="border-b hover:bg-gray-50/60">
-                        <td className="p-2">{l.date}</td><td className="p-2">{l.exercise}</td><td className="p-2 text-right">{l.setIndex}</td>
-                        <td className="p-2 text-right">{l.weight}{state.settings.unit}</td><td className="p-2 text-right">{l.reps}</td>
-                        <td className="p-2 text-right">{l.rpe}</td><td className="p-2 text-center">{l.completed ? "✅" : "—"}</td><td className="p-2">{l.notes}</td>
-                      </tr>);
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        }
-
-        function PlanView(){
-          return (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {[PLAN.phase1, PLAN.phase2, PLAN.phase3].map(function(ph, idx){
-                return (<div key={idx} className="rounded-2xl border p-4">
-                  <h3 className="font-semibold mb-1">{ph.name}</h3>
-                  <p className="text-sm text-gray-600 mb-2">세트 {ph.setRep.mainSets} · {ph.setRep.reps}회 · RPE {ph.setRep.rpe}</p>
-                  {Object.keys(ph.days).map(function(k){
-                    var arr = ph.days[k];
-                    return (<div key={k} className="mb-3">
-                      <div className="text-xs font-semibold text-gray-500 mb-1">{k==="Mon"?"월":k==="Wed"?"수":"금"}</div>
-                      <ul className="text-sm list-disc pl-5 space-y-1">
-                        {arr.map(function(ex){ return (<li key={ex.name}><span className="font-medium">{ex.name}</span> <span className="text-gray-600">{ex.tips?("· "+ex.tips):""}</span></li>); })}
-                      </ul>
-                    </div>);
-                  })}
-                </div>);
-              })}
-              <div className="rounded-2xl border p-4 lg:col-span-3">
-                <h4 className="font-semibold mb-2">운영 가이드</h4>
-                <ul className="text-sm list-disc pl-5 space-y-1">
-                  <li>세트 간 휴식 60–90초 (8–12회 고중량 세트는 최대 120초 허용)</li>
-                  <li>상한 반복을 2회 연속 달성하면 다음 세션 2.5–5% 증량</li>
-                  <li>통증 지속 시 가동범위/무게 조절, 필요시 델로드(1주 50–70% 볼륨)</li>
-                  <li>워밍업: 트레드밀 5–8분 + 메인 2종 워밍업 2세트(10회→5회)</li>
-                  <li>마무리: 정적 스트레칭 30–45초 × 2</li>
-                </ul>
-              </div>
-            </div>
-          );
-        }
-
-        function AppShell(){
-          return (<div><Header /><Tabs />{activeTab==="today"&&<Today />}{activeTab==="dashboard"&&<Dashboard />}{activeTab==="log"&&<LogTable />}{activeTab==="plan"&&<PlanView />}<Footer /></div>);
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-      } catch (e) {
-        console.error(e);
-        showErr("초기화 오류: " + (e && e.message ? e.message : e));
-      }
-    </script>
 </body>
 </html>
